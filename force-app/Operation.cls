@@ -67,13 +67,19 @@ public class Operation implements OperationSupplier {
         List<NextRequest> nextRequests;
         Operation operation;
     }
-    public interface Request {}
+    public class Ref {
+        public OperationStatus operationStatus;
+        public Ref(OperationStatus operationStatus) { this.operationStatus = operationStatus; }
+    }
+    public interface Request {
+        String getClassName();
+    }
     public class NextRequest {
         public Request request;
-        public OperationStatus operationStatus;
-        public NextRequest(Request request) {
+        public Ref box;
+        public NextRequest(Request request, Ref box) {
             this.request = request;
-            this.operationStatus = new OperationWaiting();
+            this.box = box;
         }
     }
     
@@ -85,9 +91,15 @@ public class Operation implements OperationSupplier {
     }
 
     public class EvaluatedOperation {
-        public EvaluatedOperation(State state) { this.state = state; }
         State state;
+        public EvaluatedOperation(State state) { this.state = state; }
     }
+
+    /**
+     * Cache for issued requests.
+     * Request -> Ref
+     */
+    static Map<Request, Ref> cache = new Map<Request, Ref>();
 
     OperationSupplier s;
     EvaluatedOperation a;
@@ -105,28 +117,59 @@ public class Operation implements OperationSupplier {
      */
 
     /**
-     * Constructor for the atomic operations from request.
+     * Constructor for the atomic operations from request without caching.
      */
-    public static Operation create(Request request) {
-        return new Operation(new CreateSupplier(request));
+    public static Operation unCached(Request request) {
+        return new Operation(new UnCachedSupplier(request));
     }
-
-    public class CreateSupplier implements OperationSupplier {
+    public class UnCachedSupplier implements OperationSupplier {
         Request request;
-        public CreateSupplier(Request request) { this.request = request; }
+        public UnCachedSupplier(Request request) { this.request = request; }
         public EvaluatedOperation get() {
-            NextRequest nextRequest = new NextRequest(request);
-            return new EvaluatedOperation(new Next(new List<NextRequest> { nextRequest }, new Operation(new NextOperationSupplier(nextRequest))));
+            Ref box  =  new Ref(new OperationWaiting());
+            NextRequest nextRequest = new NextRequest(request, box);
+            return new EvaluatedOperation(new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box))));
         }
     }
-    public class NextOperationSupplier implements OperationSupplier {
-        NextRequest nr;
-        public NextOperationSupplier(NextRequest nr) { this.nr = nr; }
+    public class BoxOperationSupplier implements OperationSupplier {
+        Ref box;
+        public BoxOperationSupplier(Ref box) { this.box = box; }
         public EvaluatedOperation get() {
-            OperationSuccess success = (OperationSuccess)nr.operationStatus;
+            OperationSuccess success = (OperationSuccess)box.operationStatus;
             return new EvaluatedOperation(new Done(success.result));
         }
     }
+
+    /**
+     * Constructor for the atomic operations from request with caching. 
+     * If request is already requested result will be obtained from cached result box. 
+     */
+    public static Operation cached(Request request) {
+        return new Operation(new CachedSupplier(request));
+    }
+    public class CachedSupplier implements OperationSupplier {
+        Request request;
+        public CachedSupplier(Request request) { this.request = request; }
+        public EvaluatedOperation get() {
+            Ref box = cache.get(request);
+            if (box == null) {
+                box = new Ref(new OperationWaiting());
+                cache.put(request, box);
+                NextRequest nextRequest = new NextRequest(request, box);
+                return new EvaluatedOperation(new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box))));
+            }
+            else {
+                if (box.operationStatus instanceof OperationSuccess) {
+                    OperationSuccess success = (OperationSuccess)box.operationStatus;
+                    return new EvaluatedOperation(new Done(success.result));
+                }
+                else { //if (box.operationStatus instanceof OperationWaiting) {
+                    return new EvaluatedOperation(new Next(new List<NextRequest> {}, new Operation(new BoxOperationSupplier(box))));
+                }
+            }
+        }
+    }
+    
 
     /**
      * Constructor for predefined value.
