@@ -82,6 +82,9 @@ public class Operation implements OperationSupplier {
             this.box = box;
         }
     }
+    public interface Executor {
+        void execute(List<nextRequest> nextRequests);
+    }
     
     public interface OperationStatus {}
     public class OperationWaiting implements OperationStatus {}
