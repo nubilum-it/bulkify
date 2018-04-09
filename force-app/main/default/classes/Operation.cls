@@ -351,8 +351,31 @@ public class Operation implements OperationSupplier {
 
     /**
      * Executor for the next requests.
+     * We needs to group requests be executors.
      */
     public static void execute(List<NextRequest> nextRequests) {
-        
+        Map<String, List<NextRequest>> executorRequests = groupBy(nextRequests, new ExecutorNameFunction());
+        for (String key : executorRequests.keySet()) {
+            Executor executor = (Executor)Type.forName(key).newInstance();
+            executor.execute(executorRequests.get(key));
+        }
+    }
+    public static Map<String, List<NextRequest>> groupBy(List<NextRequest> bs, Function f) {
+        Map<String, List<NextRequest>> result = new Map<String, List<NextRequest>>();
+        for (NextRequest b : bs) {
+            String key = (String)f.apply(b);
+            List<NextRequest> values = result.get(key);
+            if (values != null) { values.add(b); }
+            else {
+                values = new List<NextRequest>{b};
+                result.put(key, values);
+            }
+        }
+        return result;
+    }
+    public class ExecutorNameFunction implements Function {
+        public Object apply(Object a) {
+            return ((NextRequest)a).request.getClassName();
+        }
     }
 }
