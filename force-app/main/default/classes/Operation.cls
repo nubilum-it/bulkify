@@ -21,35 +21,14 @@ public class Operation implements OperationSupplier {
     public interface Function {
         Object apply(Object a);
     }
-    public interface Function2 {
-        Function apply(Object a);
-    }
-    public abstract class OperationFunction {
-        abstract public Operation apply(Object a);
-        public OperationFunction then(OperationFunction f) {
-            return new ThenOperationFunction(this, f);
+    public abstract class Function2 implements Function {
+        public Object apply(Object a) {
+            return apply2(a);
         }
-        public Operation bulkify(List<Object> bs) {
-            List<Operation> operations = new List<Operation>();
-            for (Object b : bs) {
-                operations.add(this.apply(b));
-            }
-            return join(operations);
-        }
+        abstract Function apply2(Object a);
     }
     public interface OperationFunction2 {
         OperationFunction apply(Operation a);
-    }
-    public class ThenOperationFunction extends OperationFunction {
-        OperationFunction fa;
-        OperationFunction fb;
-        public ThenOperationFunction(OperationFunction fa, OperationFunction fb) {
-            this.fa = fa;
-            this.fb = fb;
-        }
-        override public Operation apply(Object a) {
-            return fa.apply(a).then(fb);
-        }
     }
     public interface OperationSupplier {
         EvaluatedOperation get();
@@ -108,9 +87,14 @@ public class Operation implements OperationSupplier {
     EvaluatedOperation a;
 
     public Operation(OperationSupplier s) { this.s = s; }
+    /**
+     * Evaluate operation with given supplier. 
+     * After evaluation, supplier is released because it is not needed anymore.
+     */
     public EvaluatedOperation get() {
         if (a == null) {
             a = s.get();
+            s = null;
         }
         return a;
     }
@@ -215,7 +199,7 @@ public class Operation implements OperationSupplier {
             }
             else { // if (o.get().state instanceof Next) {
                 Next next = (Next)o.get().state;
-                return next.operation.then(f).get(); 
+                return new EvaluatedOperation(new Next(next.nextRequests, next.operation.then(f))); 
             }
         }
     }
@@ -251,7 +235,7 @@ public class Operation implements OperationSupplier {
             }
             else if (a.get().state instanceof Next && b.get().state instanceof Done) {
                 Next nextA = (Next)a.get().state;
-                Done doneB = (Done)a.get().state;
+                Done doneB = (Done)b.get().state;
                 return new EvaluatedOperation(new Next(nextA.nextRequests, nextA.operation.apply(b)));
             }
             else { //if (a.get().state instanceof Next && b.get().state instanceof Next) {
@@ -278,8 +262,8 @@ public class Operation implements OperationSupplier {
         }
         return acc;
     }
-    public class AppendFunction2 implements Function2 {
-        public Function apply(Object a) {
+    public class AppendFunction2 extends Function2 {
+        override public Function apply2(Object a) {
             return new AppendFunction(a);            
         }
     }
@@ -338,15 +322,14 @@ public class Operation implements OperationSupplier {
      * It will evaluate all operations in the chain.
      */
     public Object execute() {
-        if (this.get().state instanceof Done) {
-            Done done = (Done)this.get().state;
-            return done.value;
-        }
-        else { //if (this.get().status instanceof Next) {
-            Next next = (Next)this.get().state;
+        Operation that = this;
+        while (that.get().state instanceof Next) {
+            Next next = (Next)that.get().state;            
             execute(next.nextRequests);
-            return next.operation.execute();
-        } 
+            that = next.operation;
+        }
+        Done done = (Done)that.get().state;
+        return done.value;
     }
 
     /**

@@ -9,6 +9,7 @@
 public class DMLExecutor {
     public class Ins implements Operation.Executor {
         public void execute(List<Operation.NextRequest> nextRequests) {
+            System.debug('nextRequests: ' + nextRequests);
             Map<String, List<Operation.NextRequest>> bySObjectType = Operation.groupBy(nextRequests, new SObjectTypeFunction());
             for (String key : bySObjectType.keySet()) {
                 List<SObject> records = new List<SObject>();
@@ -27,7 +28,7 @@ public class DMLExecutor {
     public class SObjectTypeFunction implements Operation.Function {
         public Object apply(Object a) {
             Operation.NextRequest nr = (Operation.NextRequest)a;
-            return ((DMLRequest)nr.request).record.getSObjectType();
+            return ((DMLRequest)nr.request).record.getSObjectType().getDescribe().getName();
         }
     }
 
