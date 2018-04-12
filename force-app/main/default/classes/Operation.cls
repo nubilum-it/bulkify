@@ -31,7 +31,7 @@ public class Operation implements OperationSupplier {
         OperationFunction apply(Operation a);
     }
     public interface OperationSupplier {
-        EvaluatedOperation get();
+        State get();
     }
     public interface State {}
     public class Done implements State{
@@ -72,11 +72,6 @@ public class Operation implements OperationSupplier {
         public OperationSuccess(Object result) { this.result = result; }
     }
 
-    public class EvaluatedOperation {
-        State state;
-        public EvaluatedOperation(State state) { this.state = state; }
-    }
-
     /**
      * Cache for issued requests.
      * Request -> Ref
@@ -84,14 +79,14 @@ public class Operation implements OperationSupplier {
     static Map<Request, Ref> cache = new Map<Request, Ref>();
 
     OperationSupplier s;
-    EvaluatedOperation a;
+    State a;
 
     public Operation(OperationSupplier s) { this.s = s; }
     /**
      * Evaluate operation with given supplier. 
      * After evaluation, supplier is released because it is not needed anymore.
      */
-    public EvaluatedOperation get() {
+    public State get() {
         if (a == null) {
             a = s.get();
             s = null;
@@ -112,18 +107,18 @@ public class Operation implements OperationSupplier {
     public class UnCachedSupplier implements OperationSupplier {
         Request request;
         public UnCachedSupplier(Request request) { this.request = request; }
-        public EvaluatedOperation get() {
+        public State get() {
             Ref box  =  new Ref(new OperationWaiting());
             NextRequest nextRequest = new NextRequest(request, box);
-            return new EvaluatedOperation(new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box))));
+            return new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box)));
         }
     }
     public class BoxOperationSupplier implements OperationSupplier {
         Ref box;
         public BoxOperationSupplier(Ref box) { this.box = box; }
-        public EvaluatedOperation get() {
+        public State get() {
             OperationSuccess success = (OperationSuccess)box.operationStatus;
-            return new EvaluatedOperation(new Done(success.result));
+            return new Done(success.result);
         }
     }
 
@@ -137,21 +132,21 @@ public class Operation implements OperationSupplier {
     public class CachedSupplier implements OperationSupplier {
         Request request;
         public CachedSupplier(Request request) { this.request = request; }
-        public EvaluatedOperation get() {
+        public State get() {
             Ref box = cache.get(request);
             if (box == null) {
                 box = new Ref(new OperationWaiting());
                 cache.put(request, box);
                 NextRequest nextRequest = new NextRequest(request, box);
-                return new EvaluatedOperation(new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box))));
+                return new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box)));
             }
             else {
                 if (box.operationStatus instanceof OperationSuccess) {
                     OperationSuccess success = (OperationSuccess)box.operationStatus;
-                    return new EvaluatedOperation(new Done(success.result));
+                    return new Done(success.result);
                 }
                 else { //if (box.operationStatus instanceof OperationWaiting) {
-                    return new EvaluatedOperation(new Next(new List<NextRequest> {}, new Operation(new BoxOperationSupplier(box))));
+                    return new Next(new List<NextRequest> {}, new Operation(new BoxOperationSupplier(box)));
                 }
             }
         }
@@ -167,8 +162,8 @@ public class Operation implements OperationSupplier {
     public class DoneOperationSupplier implements OperationSupplier {
         Object a;
         public DoneOperationSupplier(Object a) { this.a = a; }
-        public EvaluatedOperation get() {
-            return new EvaluatedOperation(new Done(a));
+        public State get() {
+            return new Done(a);
         }
     }
 
@@ -192,14 +187,14 @@ public class Operation implements OperationSupplier {
             this.o = o;
             this.f = f;
         }
-        public EvaluatedOperation get() {
-            if (o.get().state instanceof Done) {
-                Done done = (Done)o.get().state;
+        public State get() {
+            if (o.get() instanceof Done) {
+                Done done = (Done)o.get();
                 return f.apply(done.value).get();
             }
-            else { // if (o.get().state instanceof Next) {
-                Next next = (Next)o.get().state;
-                return new EvaluatedOperation(new Next(next.nextRequests, next.operation.then(f))); 
+            else { // if (o.get() instanceof Next) {
+                Next next = (Next)o.get();
+                return new Next(next.nextRequests, next.operation.then(f)); 
             }
         }
     }
@@ -221,27 +216,27 @@ public class Operation implements OperationSupplier {
             this.a = a;
             this.b = b;
         }
-        public EvaluatedOperation get() {
-            if (a.get().state instanceof Done && b.get().state instanceof Done) {
-                Done doneA = (Done)a.get().state;
-                Done doneB = (Done)b.get().state;
+        public State get() {
+            if (a.get() instanceof Done && b.get() instanceof Done) {
+                Done doneA = (Done)a.get();
+                Done doneB = (Done)b.get();
                 Function f = (Function)doneA.value;
-                return new EvaluatedOperation(new Done(f.apply(doneB.value)));
+                return new Done(f.apply(doneB.value));
             }
-            else if (a.get().state instanceof Done && b.get().state instanceof Next) {
-                Done doneA = (Done)a.get().state;
-                Next nextB = (Next)b.get().state;
-                return new EvaluatedOperation(new Next(nextB.nextRequests, a.apply(nextB.operation)));
+            else if (a.get() instanceof Done && b.get() instanceof Next) {
+                Done doneA = (Done)a.get();
+                Next nextB = (Next)b.get();
+                return new Next(nextB.nextRequests, a.apply(nextB.operation));
             }
-            else if (a.get().state instanceof Next && b.get().state instanceof Done) {
-                Next nextA = (Next)a.get().state;
-                Done doneB = (Done)b.get().state;
-                return new EvaluatedOperation(new Next(nextA.nextRequests, nextA.operation.apply(b)));
+            else if (a.get() instanceof Next && b.get() instanceof Done) {
+                Next nextA = (Next)a.get();
+                Done doneB = (Done)b.get();
+                return new Next(nextA.nextRequests, nextA.operation.apply(b));
             }
-            else { //if (a.get().state instanceof Next && b.get().state instanceof Next) {
-                Next nextA = (Next)a.get().state;
-                Next nextB = (Next)b.get().state;
-                return new EvaluatedOperation(new Next(concat(nextA.nextRequests, nextB.nextRequests), nextA.operation.apply(nextB.operation)));
+            else { //if (a.get() instanceof Next && b.get() instanceof Next) {
+                Next nextA = (Next)a.get();
+                Next nextB = (Next)b.get();
+                return new Next(concat(nextA.nextRequests, nextB.nextRequests), nextA.operation.apply(nextB.operation));
             }
         }
     }
@@ -323,12 +318,12 @@ public class Operation implements OperationSupplier {
      */
     public Object execute() {
         Operation that = this;
-        while (that.get().state instanceof Next) {
-            Next next = (Next)that.get().state;            
+        while (that.get() instanceof Next) {
+            Next next = (Next)that.get();            
             execute(next.nextRequests);
             that = next.operation;
         }
-        Done done = (Done)that.get().state;
+        Done done = (Done)that.get();
         return done.value;
     }
 
