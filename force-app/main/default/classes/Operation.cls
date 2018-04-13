@@ -32,6 +32,7 @@ public class Operation implements OperationSupplier {
     }
     public interface OperationSupplier {
         State get();
+        List<Operation> getOperations();
     }
     public interface State {}
     public class Done implements State{
@@ -95,6 +96,18 @@ public class Operation implements OperationSupplier {
     }
 
     /**
+     * Get all operations on with evaluation of this operation is depending
+     */
+    public List<Operation> getOperations() {
+        if (a == null) {
+            return s.getOperations();
+        }
+        else {
+            return new List<Operation>{};
+        }
+    }
+
+    /**
      * Generators.
      */
 
@@ -112,6 +125,9 @@ public class Operation implements OperationSupplier {
             NextRequest nextRequest = new NextRequest(request, box);
             return new Next(new List<NextRequest> { nextRequest }, new Operation(new BoxOperationSupplier(box)));
         }
+        public List<Operation> getOperations() {
+            return new List<Operation>{};
+        }
     }
     public class BoxOperationSupplier implements OperationSupplier {
         Ref box;
@@ -119,6 +135,9 @@ public class Operation implements OperationSupplier {
         public State get() {
             OperationSuccess success = (OperationSuccess)box.operationStatus;
             return new Done(success.result);
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{};
         }
     }
 
@@ -150,6 +169,9 @@ public class Operation implements OperationSupplier {
                 }
             }
         }
+        public List<Operation> getOperations() {
+            return new List<Operation>{};
+        }
     }
     
 
@@ -164,6 +186,9 @@ public class Operation implements OperationSupplier {
         public DoneOperationSupplier(Object a) { this.a = a; }
         public State get() {
             return new Done(a);
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{};
         }
     }
 
@@ -196,6 +221,9 @@ public class Operation implements OperationSupplier {
                 Next next = (Next)o.get();
                 return new Next(next.nextRequests, next.operation.then(f)); 
             }
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{o};
         }
     }
 
@@ -238,6 +266,9 @@ public class Operation implements OperationSupplier {
                 Next nextB = (Next)b.get();
                 return new Next(concat(nextA.nextRequests, nextB.nextRequests), nextA.operation.apply(nextB.operation));
             }
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{a, b};
         }
     }
     static List<NextRequest> concat(List<NextRequest> a, List<NextRequest> b) {
@@ -318,13 +349,37 @@ public class Operation implements OperationSupplier {
      */
     public Object execute() {
         Operation that = this;
+        evaluate(that);
         while (that.get() instanceof Next) {
             Next next = (Next)that.get();            
             execute(next.nextRequests);
             that = next.operation;
+            evaluate(that);
         }
         Done done = (Done)that.get();
         return done.value;
+    }
+
+    /**
+     * Evaluate operation and all depending suboperations without causing stack overflow.
+     * Steps:
+     *   Get list of all operations that needs to be evaluated. 
+     *   Evaluate operations in oposite order.
+     */
+    public void evaluate(Operation o) {
+        List<Operation> os = new List<Operation>{o};
+        List<Operation> ps = new List<Operation>{o};
+        while (ps.size() > 0) {
+            List<Operation> rs = new List<Operation>{};
+            for (Operation p : ps) {
+                rs.addAll(p.getOperations());
+            }
+            ps = rs;
+            os.addAll(rs);
+        }
+        for (Integer a = os.size() - 1; a >= 0; a--) {
+            os[a].get();
+        }
     }
 
     /**
