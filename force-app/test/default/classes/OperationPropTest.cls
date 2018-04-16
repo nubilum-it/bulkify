@@ -1,4 +1,6 @@
 /**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
  * Properties tests for operation:
  *   insert one account with name. Bulkify and execute for list of names. (cached, uncached)
  *   query one account with name. Bulkify and execute for list of names. (cached, uncached)
@@ -152,8 +154,7 @@ private class OperationPropTest {
             .then(new CreateOpportunityFunction())
             .execute();
 
-        List<Opportunity> os = [SELECT Id FROM Opportunity];
-        System.assertEquals(1, os.size());
+        System.assertEquals(1, [SELECT Id FROM Opportunity].size());
     }
 
     @isTest
@@ -163,14 +164,13 @@ private class OperationPropTest {
             .bulkify(new List<String> {'Test 1', 'Test 2', 'Test 3'})
             .execute();
 
-        List<Opportunity> os = [SELECT Id FROM Opportunity];
-        System.assertEquals(3, os.size());
+        System.assertEquals(3, [SELECT Id FROM Opportunity].size());
     }
 
     @isTest
     static void testInsertAccountAndOpportunitySameCached() {
         List<String> names = new List<String>{};
-        for (Integer a = 0; a < 100; a++) {
+        for (Integer a = 0; a < 200; a++) {
             names.add('Test 1');
         }
         OperationFunction a = new CreateAccountFunction();
@@ -178,14 +178,13 @@ private class OperationPropTest {
             .bulkify(names)
             .execute();
 
-        List<Opportunity> os = [SELECT Id FROM Opportunity];
-        System.assertEquals(1, os.size());
+        System.assertEquals(1, [SELECT Id FROM Opportunity].size());
     }
 
     @isTest
     static void testInsertAccountAndOpportunitySameUnCached() {
         List<String> names = new List<String>{};
-        for (Integer a = 0; a < 100; a++) {
+        for (Integer a = 0; a < 200; a++) {
             names.add('Test 1');
         }
         OperationFunction a = new CreateAccountUnCachedFunction();
@@ -193,7 +192,144 @@ private class OperationPropTest {
             .bulkify(names)
             .execute();
 
-        List<Opportunity> os = [SELECT Id FROM Opportunity];
-        System.assertEquals(100, os.size());
-     }
+        System.assertEquals(200, [SELECT Id FROM Opportunity].size());
+    }
+
+    private class QueryBusinessAccountFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            String n = (String)a;
+            return Operation.join(new List<Operation> {
+                (new QueryAccountFunction()).apply(n.substring(0, 3)),
+                Operation.result(n)
+            });
+        }
+    }
+    private class CreateBusinessAccountFunction extends OperationFunction {
+        override public Operation apply(Object b) {
+            List<Object> bs = (List<Object>)b;
+            Account[] acs  = (Account[])bs[0];
+            String n = (String)bs[1];
+            if (acs.size() > 0) {
+                return Operation.join(new List<Operation> {
+                    Operation.result(acs[0]),
+                    Operation.result(n) 
+                });
+            }
+            else {
+                return Operation.join(new List<Operation> {
+                    Operation.cached(DMLRequest.ins(new Account(Name = n.substring(0, 3)))),
+                    Operation.result(n) 
+                });
+            }
+        }
+    }
+    private class CreateBusinessOpportunityFunction extends OperationFunction {
+        override public Operation apply(Object b) {
+            List<Object> bs = (List<Object>)b;
+            Account a = (Account)bs[0];
+            String n = (String)bs[1];
+            return Operation.cached(DMLRequest.ins(new Opportunity(Name = n, AccountId = a.Id, StageName = 'Prospecting', CloseDate = Date.today())));
+        }
+    }
+    @isTest
+    static void testBusinessLogic() {
+        Operation.result('Test 1')
+            .then(new QueryBusinessAccountFunction())
+            .then(new CreateBusinessAccountFunction())
+            .then(new CreateBusinessOpportunityFunction())
+            .execute();
+
+        System.assertEquals(1, [SELECT Id FROM Account].size());
+        System.assertEquals(1, [SELECT Id FROM Opportunity].size());
+    }
+
+    @isTest
+    static void testBusinessLogicBulkify() {
+        insert new Account(Name = 'Tes');
+
+        (new QueryBusinessAccountFunction())
+            .then(new CreateBusinessAccountFunction())
+            .then(new CreateBusinessOpportunityFunction())
+            .bulkify(new List<String> {'Test 1', 'Test 2', 'Test 3', 'Rest 1', 'Rest 2', 'Rest 3'})
+            .execute();
+
+        System.assertEquals(2, [SELECT Id FROM Account].size());
+        System.assertEquals(6, [SELECT Id FROM Opportunity].size());
+    }
+
+    private class QueryBusinessOpportunityFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            String n = (String)a;
+            String queryString = 'SELECT Id, Name, AccountId FROM Opportunity WHERE Name = ?';
+            queryString = queryString.replaceAll('\\?', '\'' + n + '\'');
+            return Operation.cached(SOQLRequest.query(queryString));
+        }
+    }
+    private class DeleteBusinessOpportunityFunction extends OperationFunction {
+        override public Operation apply(Object o) {
+            System.debug('Opportunities: ' + o);
+            List<SObject> os = (List<SObject>)o;
+            return Operation.join(new List<Operation> {
+                Operation.cached(DMLRequest.del(os[0])),
+                Operation.result(((Opportunity)os[0]).AccountId)
+            });
+
+        }
+    }
+    private class QueryBusinessAccountOpportunityFunction extends OperationFunction {
+        override public Operation apply(Object b) {
+            List<Object> bs = (List<Object>)b;
+            String a = (String)bs[1];
+            String queryString = 'SELECT Id, Name, AccountId FROM Opportunity WHERE AccountId = ?';
+            queryString = queryString.replaceAll('\\?', '\'' + a + '\'');
+            return Operation.join(new List<Operation> { 
+                Operation.cached(SOQLRequest.query(queryString)),
+                Operation.result(a)
+            });
+        }
+    }
+    private class DeleteBusinessAccountFunction extends OperationFunction {
+        override public Operation apply(Object b) {
+            List<Object> bs = (List<Object>)b;
+            List<SObject> os = (List<SObject>)bs[0];
+            String a = (String)bs[1];
+            if (os.size() == 0) {
+                return Operation.cached(DMLRequest.del(new Account(Id = a)));
+            }
+            else {
+                return Operation.result(new Account(Id = a));
+            }
+        }
+    }
+    @isTest
+    static void testDeleteBusinessLogic() {
+        testBusinessLogicBulkify();
+
+        Operation.result('Rest 1')
+            .then(new QueryBusinessOpportunityFunction())
+            .then(new DeleteBusinessOpportunityFunction())
+            .then(new QueryBusinessAccountOpportunityFunction())
+            .then(new DeleteBusinessAccountFunction())
+            .execute();
+
+        System.assertEquals(2, [SELECT Id FROM Account].size());
+        System.assertEquals(5, [SELECT Id FROM Opportunity].size());
+    }
+
+    @isTest
+    static void testDeleteBusinessLogicBulkify() {
+        testBusinessLogicBulkify();
+
+        OperationFunction process = (new QueryBusinessOpportunityFunction())
+            .then(new DeleteBusinessOpportunityFunction())
+            .then(new QueryBusinessAccountOpportunityFunction())
+            .then(new DeleteBusinessAccountFunction());
+
+        process
+            .bulkify(new List<String> {'Test 1', 'Rest 1', 'Rest 2', 'Rest 3'})
+            .execute();
+
+        System.assertEquals(1, [SELECT Id FROM Account].size());
+        System.assertEquals(2, [SELECT Id FROM Opportunity].size());
+   }
 }
