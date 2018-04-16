@@ -16,7 +16,7 @@ public class DMLExecutor {
             for (String key : bySObjectType.keySet()) {
                 List<SObject> records = new List<SObject>();
                 for (Operation.NextRequest nr : bySObjectType.get(key)) {
-                    records.add(((DMLRequest)nr.request).record.clone());
+                    records.add(((DMLRequest)nr.request).record.clone(true, true, true, true));
                 }
                 Database.insert(records);
                 Iterator<SObject> recIt = records.iterator();
@@ -41,7 +41,7 @@ public class DMLExecutor {
             for (String key : bySObjectType.keySet()) {
                 List<SObject> records = new List<SObject>();
                 for (Operation.NextRequest nr : bySObjectType.get(key)) {
-                    records.add(((DMLRequest)nr.request).record.clone());
+                    records.add(((DMLRequest)nr.request).record.clone(true, true, true, true));
                 }
                 Database.update(records);
                 Iterator<SObject> recIt = records.iterator();
@@ -55,12 +55,14 @@ public class DMLExecutor {
 
     public class Del implements Operation.Executor {
         public void execute(List<Operation.NextRequest> nextRequests) {
+            System.debug('nextRequests: ' + nextRequests);
             Map<String, List<Operation.NextRequest>> bySObjectType = Operation.groupBy(nextRequests, new SObjectTypeFunction());
             for (String key : bySObjectType.keySet()) {
                 List<SObject> records = new List<SObject>();
                 for (Operation.NextRequest nr : bySObjectType.get(key)) {
-                    records.add(((DMLRequest)nr.request).record.clone());
+                    records.add(((DMLRequest)nr.request).record.clone(true, true, true, true));
                 }
+                System.debug('Records: ' + records);
                 Database.delete(records);
                 Iterator<SObject> recIt = records.iterator();
                 Iterator<Operation.NextRequest> nrIt = bySObjectType.get(key).iterator();
@@ -75,7 +77,7 @@ public class DMLExecutor {
         public void execute(List<Operation.NextRequest> nextRequests) {
             for (Operation.NextRequest nr : nextRequests) {
                 DMLRequest.Ups request = (DMLRequest.Ups)nr.request;
-                SObject record = request.record.clone();
+                SObject record = request.record.clone(true, true, true, true);
                 Database.upsert(request.record, request.externalIdField); 
                 nr.box.operationStatus = new Operation.OperationSuccess(record);
             }
