@@ -1,4 +1,6 @@
 /**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
  * DML Executor functionality. 
  * Steps of execution:
  *   groupBy SObject type already each grouped request.

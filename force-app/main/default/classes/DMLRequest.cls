@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
+ */
 public abstract class DMLRequest implements Operation.Request {
     public SObject record;
     public DMLRequest(SObject record) { this.record = record; }

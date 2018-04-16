@@ -1,4 +1,6 @@
 /**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
  * Execute SOQL queries. 
  * For now we are keeping it plain simple. Bulkification should be added
  * in product.

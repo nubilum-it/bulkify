@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
+ */
 public class SOQLRequest implements Operation.Request {
     public String query;
     public SOQLRequest(String query) { this.query = query; }

@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
+ */
 public abstract class OperationFunction {
     abstract public Operation apply(Object a);
     public OperationFunction then(OperationFunction f) {

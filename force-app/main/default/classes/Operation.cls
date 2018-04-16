@@ -1,4 +1,6 @@
 /**
+ * Copyright (c) 2018-present, Nubilum IT Consulting d.o.o. 
+ * All rights reserved.
  * Operation is a generic type for doing some data manipulation that can be bulkified.
  * For example we can have oparetaion to retrieve data from database(SOQL) another is
  * to save it to the database(DML).
