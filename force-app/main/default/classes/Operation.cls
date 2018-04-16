@@ -79,7 +79,7 @@ public class Operation implements OperationSupplier {
      * Cache for issued requests.
      * Request -> Ref
      */
-    static Map<Request, Ref> cache = new Map<Request, Ref>();
+    public static Map<Request, Ref> cache = new Map<Request, Ref>();
 
     OperationSupplier s;
     State a;
@@ -386,7 +386,7 @@ public class Operation implements OperationSupplier {
 
     /**
      * Executor for the next requests.
-     * We needs to group requests be executors.
+     * We needs to group requests by executors.
      */
     public static void execute(List<NextRequest> nextRequests) {
         Map<String, List<NextRequest>> executorRequests = groupBy(nextRequests, new ExecutorNameFunction());
