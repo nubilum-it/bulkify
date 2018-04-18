@@ -331,5 +331,17 @@ private class OperationPropTest {
 
         System.assertEquals(1, [SELECT Id FROM Account].size());
         System.assertEquals(2, [SELECT Id FROM Opportunity].size());
-   }
+    }
+    @isTest
+    static void testBulkifyLimit() {
+        OperationFunction createAccount = new CreateAccountFunction();
+        List<String> names = new List<String>();
+        for (Integer i = 1; i <= 1000; i++) {
+            names.add('Test 1');
+        }
+
+        createAccount.bulkify(names).execute();
+
+        System.assertEquals(1, [SELECT Id FROM Account].size());
+    }
 }

@@ -279,9 +279,11 @@ public class Operation implements OperationSupplier {
         return result;
     }
 
-     /**
-     * Joins list of operations into the one operation.
+    /**
+     * Joins list of operations into the one operation using applicative apply.
+     * Code is just for info. This is how it previously worked.
      */
+    /*
     public static Operation join(List<Operation> operations) {
         Operation acc = Operation.result(new List<Object>());
         OperationFunction2 cons = new LiftOperationFunction2(new AppendFunction2());
@@ -323,10 +325,58 @@ public class Operation implements OperationSupplier {
         return Operation.result(f).apply(a).apply((Operation)b);
         }
     }
+    */
 
     /**
-     * Join list of the operation functions into the one operation function. 
+     * Optimized version of applicative join operation.
+     * It should have better execution time and memory consumption. 
+     * Steps:
+     *   Evaluate all operations.
+     *   If all operations are Done create Done operation with list of all results.
+     *   Otherwise create Next operation with:
+     *     operation as join of all next.operation
+     *     Done operations are passed by reference that has been evaluated.
      */
+    public static Operation join(List<Operation> operations) {
+        return new Operation(new JoinOperationSupplier(operations));
+    }
+    public class JoinOperationSupplier implements OperationSupplier {
+        List<Operation> operations;
+        public JoinOperationSupplier(List<Operation> operations) { this.operations = operations; }
+        public State get() {
+            Boolean isDone = true;
+            List<Operation> nextOperations = new List<Operation>();
+            List<NextRequest> nextRequests = new List<NextRequest>();
+            for (Operation o : operations) {
+                if (o.get() instanceof Done) {
+                    nextOperations.add(o);
+                }
+                else { //if (o.get() instanceof Next) {
+                    Next nextA = (Next)o.get();
+                    nextOperations.add(nextA.operation);
+                    nextRequests.addAll(nextA.nextRequests);
+                    isDone = false;
+                }
+            }
+            if (isDone) {
+                List<Object> result = new List<Object>();
+                for (Operation o : nextOperations) {
+                    Done doneA = (Done)o.get();
+                    result.add(doneA.value);
+                }
+                return new Done(result); 
+            }
+            else {
+                return new Next(nextRequests, join(nextOperations));
+            }
+        }
+        public List<Operation> getOperations() { return operations; }
+    }
+
+
+    /**
+    * Join list of the operation functions into the one operation function. 
+    */
     public static OperationFunction join(List<OperationFunction> fs) {
         return new JoinOperationFunction(fs);
     }
@@ -346,9 +396,9 @@ public class Operation implements OperationSupplier {
     }
 
     /**
-     * Execution of the operation.
-     * It will evaluate all operations in the chain.
-     */
+    * Execution of the operation.
+    * It will evaluate all operations in the chain.
+    */
     public Object execute() {
         Operation that = this;
         evaluate(that);
@@ -363,11 +413,11 @@ public class Operation implements OperationSupplier {
     }
 
     /**
-     * Evaluate operation and all depending suboperations without causing stack overflow.
-     * Steps:
-     *   Get list of all operations that needs to be evaluated. 
-     *   Evaluate operations in oposite order.
-     */
+    * Evaluate operation and all depending suboperations without causing stack overflow.
+    * Steps:
+    *   Get list of all operations that needs to be evaluated. 
+    *   Evaluate operations in oposite order.
+    */
     public void evaluate(Operation o) {
         List<Operation> os = new List<Operation>{o};
         List<Operation> ps = new List<Operation>{o};
@@ -385,9 +435,9 @@ public class Operation implements OperationSupplier {
     }
 
     /**
-     * Executor for the next requests.
-     * We needs to group requests by executors.
-     */
+    * Executor for the next requests.
+    * We needs to group requests by executors.
+    */
     public static void execute(List<NextRequest> nextRequests) {
         Map<String, List<NextRequest>> executorRequests = groupBy(nextRequests, new ExecutorNameFunction());
         for (String key : executorRequests.keySet()) {
@@ -412,5 +462,5 @@ public class Operation implements OperationSupplier {
         public Object apply(Object a) {
             return ((NextRequest)a).request.getClassName();
         }
-    }
+    }            
 }
