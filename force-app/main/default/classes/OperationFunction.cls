@@ -7,13 +7,6 @@ public abstract class OperationFunction {
     public OperationFunction then(OperationFunction f) {
         return new ThenOperationFunction(this, f);
     }
-    public Operation bulkify(List<Object> bs) {
-        List<Operation> operations = new List<Operation>();
-        for (Object b : bs) {
-            operations.add(this.apply(b));
-        }
-        return Operation.join(operations);
-    }
     public class ThenOperationFunction extends OperationFunction {
         OperationFunction fa;
         OperationFunction fb;
@@ -25,4 +18,25 @@ public abstract class OperationFunction {
             return fa.apply(a).then(fb);
         }
     }
- }
+    public OperationFunction recoverWith(OperationFunction f) {
+        return new RecoverWithOperationFunction(this, f);
+    }
+    public class RecoverWithOperationFunction extends OperationFunction {
+        OperationFunction fa;
+        OperationFunction fb;
+        public RecoverWithOperationFunction(OperationFunction fa, OperationFunction fb) {
+            this.fa = fa;
+            this.fb = fb;
+        }
+        override public Operation apply(Object a) {
+            return fa.apply(a).recoverWith(fb);
+        }
+    }
+    public Operation bulkify(List<Object> bs) {
+        List<Operation> operations = new List<Operation>();
+        for (Object b : bs) {
+            operations.add(this.apply(b));
+        }
+        return Operation.join(operations);
+    }
+  }

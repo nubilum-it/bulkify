@@ -11,13 +11,15 @@
  *   bulkify
  * Operation will be executed by using:
  *   execute
- * Each operation will have two states:
+ * Each operation will have three states:
  *   Done
  *   Next
+ *   Error
  * Next state will contain list of (Request, OperationResult) = NextRequest
  * OperationResult will have:
  *   OperationWaiting
  *   OperationSuccess 
+ *   OperationError
  */
 public class Operation implements OperationSupplier {
     public interface Function {
@@ -49,6 +51,12 @@ public class Operation implements OperationSupplier {
         List<NextRequest> nextRequests;
         Operation operation;
     }
+    public class Error implements State {
+        public Error(Exception e) {
+            this.e = e;
+        }
+        Exception e;
+    }
     public class Ref {
         public OperationStatus operationStatus;
         public Ref(OperationStatus operationStatus) { this.operationStatus = operationStatus; }
@@ -73,6 +81,10 @@ public class Operation implements OperationSupplier {
     public class OperationSuccess implements OperationStatus {
         public Object result;
         public OperationSuccess(Object result) { this.result = result; }
+    }
+    public class OperationError implements OperationStatus {
+        public Exception e;
+        public OperationError(Exception e) { this.e = e; }
     }
 
     /**
@@ -135,8 +147,14 @@ public class Operation implements OperationSupplier {
         Ref box;
         public BoxOperationSupplier(Ref box) { this.box = box; }
         public State get() {
-            OperationSuccess success = (OperationSuccess)box.operationStatus;
-            return new Done(success.result);
+            if (box.operationStatus instanceof OperationSuccess) {
+                OperationSuccess success = (OperationSuccess)box.operationStatus;
+                return new Done(success.result);
+            }
+            else { //if (box.operationStatus instanceof OperationError) {
+                OperationError error = (OperationError)box.operationStatus;
+                return new Error(error.e);
+            }
         }
         public List<Operation> getOperations() {
             return new List<Operation>{};
@@ -166,8 +184,12 @@ public class Operation implements OperationSupplier {
                     OperationSuccess success = (OperationSuccess)box.operationStatus;
                     return new Done(success.result);
                 }
-                else { //if (box.operationStatus instanceof OperationWaiting) {
+                else if (box.operationStatus instanceof OperationWaiting) {
                     return new Next(new List<NextRequest> {}, new Operation(new BoxOperationSupplier(box)));
+                }
+                else { //if (box.operatoinStatus instanceof OperationError) {
+                    OperationError error = (OperationError)box.operationStatus;
+                    return new Error(error.e);
                 }
             }
         }
@@ -195,6 +217,23 @@ public class Operation implements OperationSupplier {
     }
 
     /**
+     * Consturctor for error value.
+     */
+    public static Operation error(Exception e) {
+        return new Operation(new ErrorOperationSupplier(e));
+    }
+    public class ErrorOperationSupplier implements OperationSupplier {
+        Exception e;
+        public ErrorOperationSupplier(Exception e) { this.e = e; }
+        public State get() {
+            return new Error(e);
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{};
+        }
+    }
+
+    /**
      * Combinators.
      */
 
@@ -215,13 +254,59 @@ public class Operation implements OperationSupplier {
             this.f = f;
         }
         public State get() {
-            if (o.get() instanceof Done) {
-                Done done = (Done)o.get();
-                return f.apply(done.value).get();
+            try {
+                if (o.get() instanceof Done) {
+                    Done done = (Done)o.get();
+                    return f.apply(done.value).get();
+                }
+                else if (o.get() instanceof Next) {
+                    Next next = (Next)o.get();
+                    return new Next(next.nextRequests, next.operation.then(f)); 
+                }
+                else { // if (o.get() instanceof Error) {
+                    return o.get();
+                }
             }
-            else { // if (o.get() instanceof Next) {
-                Next next = (Next)o.get();
-                return new Next(next.nextRequests, next.operation.then(f)); 
+            catch (Exception e) {
+                return new Error(e);
+            }
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{o};
+        }
+    }
+
+    /**
+     * Recovery from the error.
+     * When evaluating operation on next operation we are attaching error handler
+     * so that we recover whole operation chain.
+     */
+    public Operation recoverWith(OperationFunction f) {
+        return new Operation(new RecoverOperationSupplier(this, f));
+    }
+    public class RecoverOperationSupplier implements OperationSupplier {
+        Operation o;
+        OperationFunction f;
+        public RecoverOperationSupplier(Operation o, OperationFunction f) {
+            this.o = o;
+            this.f = f;
+        }
+        public State get() {
+            try {
+                if (o.get() instanceof Done) {
+                    return o.get();
+                }
+                else if (o.get() instanceof Next) {
+                    Next nextA = (Next)o.get();
+                    return new Next(nextA.nextRequests, nextA.operation.recoverWith(f));
+                }
+                else { //if (o.get() instanceof Error) {
+                    Error a = (Error)o.get();
+                    return f.apply(a.e).get();
+                }
+            }
+            catch (Exception e) {
+                return new Error(e);
             }
         }
         public List<Operation> getOperations() {
@@ -263,10 +348,22 @@ public class Operation implements OperationSupplier {
                 Done doneB = (Done)b.get();
                 return new Next(nextA.nextRequests, nextA.operation.apply(b));
             }
-            else { //if (a.get() instanceof Next && b.get() instanceof Next) {
+            else if (a.get() instanceof Next && b.get() instanceof Next) {
                 Next nextA = (Next)a.get();
                 Next nextB = (Next)b.get();
                 return new Next(concat(nextA.nextRequests, nextB.nextRequests), nextA.operation.apply(nextB.operation));
+            }
+            else if (a.get() instanceof Next && b.get() instanceof Error) { 
+                // We don't know if left side with return Error in the end.
+                // If yes we should return left side error.
+                Next nextA = (Next)a.get();
+                return new Next(nextA.nextRequests, nextA.operation.apply(b));
+            }
+            else if (a.get() instanceof Error) {
+                return a.get();
+            }
+            else { // if (!(a.get() instanceof Error) && b.get() instanceof Error) {
+                return b.get();
             }
         }
         public List<Operation> getOperations() {
@@ -333,6 +430,9 @@ public class Operation implements OperationSupplier {
      * Steps:
      *   Evaluate all operations.
      *   If all operations are Done create Done operation with list of all results.
+     *   If one operation is Error:
+     *     Previous operations are Done return Error. 
+     *     Otherwise join previous next.operatoins and evalueated Done with Error at the end.
      *   Otherwise create Next operation with:
      *     operation as join of all next.operation
      *     Done operations are passed by reference that has been evaluated.
@@ -351,11 +451,20 @@ public class Operation implements OperationSupplier {
                 if (o.get() instanceof Done) {
                     nextOperations.add(o);
                 }
-                else { //if (o.get() instanceof Next) {
+                else if (o.get() instanceof Next) {
                     Next nextA = (Next)o.get();
                     nextOperations.add(nextA.operation);
                     nextRequests.addAll(nextA.nextRequests);
                     isDone = false;
+                }
+                else { //if (o.get() instanceof Error) {
+                    if (isDone) {
+                        return o.get();
+                    }
+                    else {
+                        nextOperations.add(o);
+                        return new Next(nextRequests, join(nextOperations));
+                    }
                 }
             }
             if (isDone) {
@@ -408,9 +517,15 @@ public class Operation implements OperationSupplier {
             that = next.operation;
             evaluate(that);
         }
+        if (that.get() instanceof Error) {
+            Error error = (Error)that.get();
+            throw error.e;
+        }
+        // if (that.get() instanceof Done) {
         Done done = (Done)that.get();
         return done.value;
-    }
+        // }
+   }
 
     /**
     * Evaluate operation and all depending suboperations without causing stack overflow.
