@@ -56,7 +56,9 @@ public abstract class DMLRequest implements Operation.Request {
             final Integer PRIME = 59;
             Integer result = 1;
             result = result * PRIME + ((Object)record).hashCode();
-            result = result * PRIME + ((Object)externalIdField).hashCode();
+            if (externalIdField != null) {
+                result = result * PRIME + ((Object)externalIdField).hashCode();
+            }
             return result;
         }
         public Boolean equals(Object a) {

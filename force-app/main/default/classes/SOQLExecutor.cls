@@ -9,14 +9,19 @@
 public class SOQLExecutor implements Operation.Executor {
     public void execute(List<Operation.NextRequest> nextRequests) {
         for (Operation.NextRequest nr : nextRequests) {
-            SOQLRequest request = (SOQLRequest)nr.request;
-            List<SObject> result = new List<SObject> {};
-            Database.QueryLocator queryLocator = Database.getQueryLocator(request.query);
-            Database.QueryLocatorIterator queryIt = queryLocator.iterator();
-            while (queryIt.hasNext()) {
-                result.add(queryIt.next());
+            try {
+                SOQLRequest request = (SOQLRequest)nr.request;
+                List<SObject> result = new List<SObject> {};
+                Database.QueryLocator queryLocator = Database.getQueryLocator(request.query);
+                Database.QueryLocatorIterator queryIt = queryLocator.iterator();
+                while (queryIt.hasNext()) {
+                    result.add(queryIt.next());
+                }
+                nr.box.operationStatus = new Operation.OperationSuccess(result);
             }
-            nr.box.operationStatus = new Operation.OperationSuccess(result);
+            catch (Exception e) {
+                nr.box.operationStatus = new Operation.OperationError(e);
+            }
         }
     }
 }

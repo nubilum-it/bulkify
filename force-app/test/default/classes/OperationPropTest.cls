@@ -7,6 +7,8 @@
  *   insert account with name then opportunity to that account. Bulkify and execute it for list of names. (cached, uncached)
  *   insert opportunity with name and if account doesn't exists create new one. Bulkify and execute if for list of names.
  *   delete opportunity from account. If account is without opportunities delete it. Bulkify and execute if for list of names.
+ *   error behaviour. If error happened in operation chain rest of the operations will not be executed and exeption will be thrown.
+ *   error recoveryBehaviour. On error recovery function is called to recover result.
  */
 @isTest
 private class OperationPropTest {
@@ -24,18 +26,49 @@ private class OperationPropTest {
             return Operation.unCached(DMLRequest.ins(acc));
         }
     }
+    private class UpsertAccountFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            String name = (String)a;
+            Account acc = new Account(Name = name);
+            return Operation.cached(DMLRequest.ups(acc, null));
+        }
+    }
+    private class UpdateAccountFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            Account acc = (Account)a;
+            acc.Name = acc.Name + '0';
+            return Operation.cached(DMLRequest.upd(acc));
+        }
+    }
+  
     @isTest
     static void testInsertAccount() {
         Operation.result('Test 1').then(new CreateAccountFunction()).execute();
 
         System.assertEquals(1, [SELECT Id FROM Account].size());
     }
+    
+    @isTest
+    static void testInsertUpdateAccount() {
+        Operation.result('Test 1').then(new CreateAccountFunction()).then(new UpdateAccountFunction()).execute();
+
+        System.assertEquals(1, [SELECT Id FROM Account WHERE Name = 'Test 10'].size());
+    }
+    
+    @isTest
+    static void testUpsertAccount() {
+        Operation.result('Test 1').then(new UpsertAccountFunction()).execute();
+        
+        System.assertEquals(1, [SELECT Id FROM Account].size());
+    }
+
     @isTest
     static void testInsertAccountBulkify() {
-        OperationFunction createAccount = new CreateAccountFunction();
+        OperationFunction createAccount = (new CreateAccountFunction());
         createAccount.bulkify(new List<String> {'Test 1', 'Test 2', 'Test 3'}).execute();
         System.assertEquals(3, [SELECT Id FROM Account].size());
     }
+
     @isTest
     static void testInsertAccountSameCached() {
         OperationFunction createAccount = new CreateAccountFunction();
@@ -43,6 +76,7 @@ private class OperationPropTest {
 
         System.assertEquals(1, [SELECT Id FROM Account].size());
     }
+    
     @isTest
     static void testInsertAccountSameUnCached() {
         OperationFunction createAccount = new CreateAccountUnCachedFunction();
@@ -66,6 +100,7 @@ private class OperationPropTest {
             return Operation.unCached(SOQLRequest.query(queryString));
         }
     }
+
     @isTest
     static void testQueryAccount() {
         testInsertAccountBulkify();
@@ -332,6 +367,7 @@ private class OperationPropTest {
         System.assertEquals(1, [SELECT Id FROM Account].size());
         System.assertEquals(2, [SELECT Id FROM Opportunity].size());
     }
+    
     @isTest
     static void testBulkifyLimit() {
         OperationFunction createAccount = new CreateAccountFunction();
@@ -343,5 +379,64 @@ private class OperationPropTest {
         createAccount.bulkify(names).execute();
 
         System.assertEquals(1, [SELECT Id FROM Account].size());
+    }
+
+    private class TestException extends Exception {}
+    private class ErrorFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            return Operation.error(new TestException());
+        }
+    }
+    private class ErrorOpportunityFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            String n = (String)a;
+            return Operation.cached(DMLRequest.ins(new Opportunity(Name = n)));
+        }
+    }
+    private class RecoverFunction extends OperationFunction {
+        override public Operation apply(Object a) {
+            return Operation.result('Test');
+        }
+    }
+    @isTest
+    static void testError() {
+        try {
+            (new CreateAccountFunction())
+                .then(new ErrorFunction())
+                .apply('Test 1')
+                .execute();
+            System.assert(false);
+        } 
+        catch (Exception e) {
+            System.assert(true);
+        }
+    }
+
+    @isTest
+    static void testOpportunityError() {
+        try {
+            (new ErrorOpportunityFunction())
+                .apply('Test 1')
+                .execute();
+            System.assert(false);
+        }
+        catch (Exception e) {
+            System.assert(true);
+        }
+    }
+    
+    @isTest
+    static void testErrorRecovery() {
+        try {
+            (new CreateAccountFunction())
+                .then(new ErrorFunction())
+                .recoverWith(new RecoverFunction())
+                .apply('Test 1')
+                .execute();
+            System.assert(true);
+        } 
+        catch (Exception e) {
+            System.assert(false);
+        }
     }
 }
