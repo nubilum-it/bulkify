@@ -103,34 +103,41 @@ public class DMLExecutor {
 
     public class Ups implements Operation.Executor {
         public void execute(List<Operation.NextRequest> nextRequests) {
-            Map<String, List<Operation.NextRequest>> bySObjectTypeField = Operation.groupBy(nextRequests, new SObjectTypeFieldFunction());
-            for (String key : bySObjectTypeField.keySet()) {
-                DMLRequest.Ups r = ((DMLRequest.Ups)bySObjectTypeField.get(key)[0].request);
-                String listType = 'List<' + r.record.getSObjectType().getDescribe().getName() + '>';
-                List<SObject> records = (List<SObject>)Type.forName(listType).newInstance();
-                Schema.SObjectField externalIdField = r.externalIdField;
-                for (Operation.NextRequest nr : bySObjectTypeField.get(key)) {
-                    records.add(((DMLRequest.Ups)nr.request).record.clone(true, true, true, true));
-                }
-                Database.UpsertResult[] results; 
-                if (externalIdField == null) {
-                    results = Database.upsert(records);
-                }
-                else {
-                    results = Database.upsert(records, externalIdField);
-                }
-                Iterator<SObject> recIt = records.iterator();
-                Iterator<Operation.NextRequest> nrIt = bySObjectTypeField.get(key).iterator();
-                Iterator<Database.UpsertResult> resultIt = results.iterator();
-                while (recIt.hasNext() && nrIt.hasNext() && resultIt.hasNext()) {
-                    Database.UpsertResult result = resultIt.next();
-                    if (result.isSuccess()) {
-                        nrIt.next().box.operationStatus = new Operation.OperationSuccess(recIt.next());
+            try {
+                Map<String, List<Operation.NextRequest>> bySObjectTypeField = Operation.groupBy(nextRequests, new SObjectTypeFieldFunction());
+                for (String key : bySObjectTypeField.keySet()) {
+                    DMLRequest.Ups r = ((DMLRequest.Ups)bySObjectTypeField.get(key)[0].request);
+                    String listType = 'List<' + r.record.getSObjectType().getDescribe().getName() + '>';
+                    List<SObject> records = (List<SObject>)Type.forName(listType).newInstance();
+                    Schema.SObjectField externalIdField = r.externalIdField;
+                    for (Operation.NextRequest nr : bySObjectTypeField.get(key)) {
+                        records.add(((DMLRequest.Ups)nr.request).record.clone(true, true, true, true));
+                    }
+                    Database.UpsertResult[] results; 
+                    if (externalIdField == null) {
+                        results = Database.upsert(records, false);
                     }
                     else {
-                        nrIt.next().box.operationStatus = new Operation.OperationError(new DMLException(getErrorMessage(result.getErrors())));
-                        recIt.next();
+                        results = Database.upsert(records, externalIdField);
                     }
+                    Iterator<SObject> recIt = records.iterator();
+                    Iterator<Operation.NextRequest> nrIt = bySObjectTypeField.get(key).iterator();
+                    Iterator<Database.UpsertResult> resultIt = results.iterator();
+                    while (recIt.hasNext() && nrIt.hasNext() && resultIt.hasNext()) {
+                        Database.UpsertResult result = resultIt.next();
+                        if (result.isSuccess()) {
+                            nrIt.next().box.operationStatus = new Operation.OperationSuccess(recIt.next());
+                        }
+                        else {
+                            nrIt.next().box.operationStatus = new Operation.OperationError(new DMLException(getErrorMessage(result.getErrors())));
+                            recIt.next();
+                        }
+                    }
+                }
+            }
+            catch (Exception e) {
+                for (Operation.NextRequest nr : nextRequests) {
+                    nr.box.operationStatus = new Operation.OperationError(e);
                 }
             }
         }
