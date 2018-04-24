@@ -315,6 +315,53 @@ public class Operation implements OperationSupplier {
     }
 
     /**
+     * Always run the code block. 
+     * When evaluating operation on next operation we are attaching this code block.
+     * Code blocked is runned on Done | Error. 
+     * If exception is thrown on Done we will generate Error otherwise old error will be propagated.
+     */
+    public Operation allways(CodeBlock b) {
+        return new Operation(new AllwaysOperationSupplier(this, b));
+    }
+    public class AllwaysOperationSupplier implements OperationSupplier {
+        Operation o;
+        CodeBlock b;
+        public AllwaysOperationSupplier(Operation o, CodeBlock b) {
+            this.o = o;
+            this.b = b;
+        }
+        public State get() {
+            try {
+                if (o.get() instanceof Done) {
+                    // Run code block
+                    b.run();
+                    return o.get();
+                }
+                else if (o.get() instanceof Next) {
+                    Next nextA = (Next)o.get();
+                    return new Next(nextA.nextRequests, nextA.operation.allways(b));
+                }
+                else {// if (o.get() instanceof Error) {
+                    // Run code block
+                    b.run();
+                    return o.get();
+                }
+            }
+            catch (Exception e) {
+                if (o.get() instanceof Error) {
+                    return o.get();
+                }                
+                else {
+                    return new Error(e);
+                }
+            }
+        }
+        public List<Operation> getOperations() {
+            return new List<Operation>{o};
+        }
+    }
+
+    /**
      * Apply of he Operation function with the Operation value. 
      * Arguments:
      *   Operation f - function that will be applied. 

@@ -439,4 +439,27 @@ private class OperationPropTest {
             System.assert(false);
         }
     }
+
+    public class TestBlock implements CodeBlock {
+        public Integer a;
+        public TestBlock(Integer a) { this.a = a; }
+        public void run() {
+            a++;
+        }
+    }
+    @isTest
+    static void testAllways() {
+        TestBlock codeBlock = new TestBlock(0);
+        try {
+            (new CreateAccountFunction())
+                .allways(codeBlock)
+                .then(new ErrorFunction())
+                .allways(codeBlock)
+                .apply('Test 1')
+                .execute();
+        }
+        catch (Exception e) {}
+        
+        System.assertEquals(2, codeBlock.a);
+    }
 }
