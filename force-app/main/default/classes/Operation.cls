@@ -281,7 +281,7 @@ public class Operation implements OperationSupplier {
      * When evaluating operation on next operation we are attaching error handler
      * so that we recover whole operation chain.
      */
-    public Operation recoverWith(OperationFunction f) {
+    public Operation recover(OperationFunction f) {
         return new Operation(new RecoverOperationSupplier(this, f));
     }
     public class RecoverOperationSupplier implements OperationSupplier {
@@ -298,7 +298,7 @@ public class Operation implements OperationSupplier {
                 }
                 else if (o.get() instanceof Next) {
                     Next nextA = (Next)o.get();
-                    return new Next(nextA.nextRequests, nextA.operation.recoverWith(f));
+                    return new Next(nextA.nextRequests, nextA.operation.recover(f));
                 }
                 else { //if (o.get() instanceof Error) {
                     Error a = (Error)o.get();

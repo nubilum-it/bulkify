@@ -430,7 +430,7 @@ private class OperationPropTest {
         try {
             (new CreateAccountFunction())
                 .then(new ErrorFunction())
-                .recoverWith(new RecoverFunction())
+                .recover(new RecoverFunction())
                 .apply('Test 1')
                 .execute();
             System.assert(true);

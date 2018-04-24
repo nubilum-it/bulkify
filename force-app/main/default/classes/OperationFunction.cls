@@ -18,18 +18,18 @@ public abstract class OperationFunction {
             return fa.apply(a).then(fb);
         }
     }
-    public OperationFunction recoverWith(OperationFunction f) {
-        return new RecoverWithOperationFunction(this, f);
+    public OperationFunction recover(OperationFunction f) {
+        return new RecoverOperationFunction(this, f);
     }
-    public class RecoverWithOperationFunction extends OperationFunction {
+    public class RecoverOperationFunction extends OperationFunction {
         OperationFunction fa;
         OperationFunction fb;
-        public RecoverWithOperationFunction(OperationFunction fa, OperationFunction fb) {
+        public RecoverOperationFunction(OperationFunction fa, OperationFunction fb) {
             this.fa = fa;
             this.fb = fb;
         }
         override public Operation apply(Object a) {
-            return fa.apply(a).recoverWith(fb);
+            return fa.apply(a).recover(fb);
         }
     }
     public Operation bulkify(List<Object> bs) {
