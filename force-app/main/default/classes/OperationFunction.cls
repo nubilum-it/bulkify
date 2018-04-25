@@ -18,13 +18,13 @@ public abstract class OperationFunction {
             return fa.apply(a).then(fb);
         }
     }
-    public OperationFunction recover(OperationFunction f) {
+    public OperationFunction recover(RecoverFunction f) {
         return new RecoverOperationFunction(this, f);
     }
     public class RecoverOperationFunction extends OperationFunction {
         OperationFunction fa;
-        OperationFunction fb;
-        public RecoverOperationFunction(OperationFunction fa, OperationFunction fb) {
+        RecoverFunction fb;
+        public RecoverOperationFunction(OperationFunction fa, RecoverFunction fb) {
             this.fa = fa;
             this.fb = fb;
         }
@@ -53,4 +53,4 @@ public abstract class OperationFunction {
         }
         return Operation.join(operations);
     }
-  }
+}

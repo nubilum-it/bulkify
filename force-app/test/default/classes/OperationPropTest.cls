@@ -382,27 +382,17 @@ private class OperationPropTest {
     }
 
     private class TestException extends Exception {}
-    private class ErrorFunction extends OperationFunction {
-        override public Operation apply(Object a) {
-            return Operation.error(new TestException());
-        }
-    }
     private class ErrorOpportunityFunction extends OperationFunction {
         override public Operation apply(Object a) {
             String n = (String)a;
             return Operation.cached(DMLRequest.ins(new Opportunity(Name = n)));
         }
     }
-    private class RecoverFunction extends OperationFunction {
-        override public Operation apply(Object a) {
-            return Operation.result('Test');
-        }
-    }
     @isTest
     static void testError() {
         try {
             (new CreateAccountFunction())
-                .then(new ErrorFunction())
+                .then(Operation.error(new TestException()).operationFunction())
                 .apply('Test 1')
                 .execute();
             System.assert(false);
@@ -429,8 +419,8 @@ private class OperationPropTest {
     static void testErrorRecovery() {
         try {
             (new CreateAccountFunction())
-                .then(new ErrorFunction())
-                .recover(new RecoverFunction())
+                .then(Operation.error(new TestException()).operationFunction())
+                .recover(Operation.result('Test').recoverFunction())
                 .apply('Test 1')
                 .execute();
             System.assert(true);
@@ -453,7 +443,7 @@ private class OperationPropTest {
         try {
             (new CreateAccountFunction())
                 .allways(codeBlock)
-                .then(new ErrorFunction())
+                .then(Operation.error(new TestException()).operationFunction())
                 .allways(codeBlock)
                 .apply('Test 1')
                 .execute();

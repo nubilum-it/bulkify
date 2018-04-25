@@ -234,6 +234,32 @@ public class Operation implements OperationSupplier {
     }
 
     /**
+     * Convert to operation function that will ingore argument and return this operation. 
+     * Used for fast conversion to operation function for then combinator.
+     */ 
+    public OperationFunction operationFunction() {
+        return new ToOperationFunction(this);
+    }
+    public class ToOperationFunction extends OperationFunction {
+        Operation o;
+        public ToOperationFunction(Operation o) { this.o = o; }
+        override public Operation apply(Object a) { return o; }
+    }
+
+    /**
+     * Convert to recover function that will ignore argument and return this operation. 
+     * User for fast conversion to recover function for recover combinator.
+     */ 
+    public RecoverFunction recoverFunction() {
+        return new ToRecoverFunction(this);
+    }
+    public class ToRecoverFunction extends RecoverFunction {
+        Operation o;
+        public ToRecoverFunction(Operation o) { this.o = o; }
+        override public Operation apply(Exception e) { return o; }
+    }
+
+    /**
      * Combinators.
      */
 
@@ -281,13 +307,13 @@ public class Operation implements OperationSupplier {
      * When evaluating operation on next operation we are attaching error handler
      * so that we recover whole operation chain.
      */
-    public Operation recover(OperationFunction f) {
+    public Operation recover(RecoverFunction f) {
         return new Operation(new RecoverOperationSupplier(this, f));
     }
     public class RecoverOperationSupplier implements OperationSupplier {
         Operation o;
-        OperationFunction f;
-        public RecoverOperationSupplier(Operation o, OperationFunction f) {
+        RecoverFunction f;
+        public RecoverOperationSupplier(Operation o, RecoverFunction f) {
             this.o = o;
             this.f = f;
         }
