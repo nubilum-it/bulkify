@@ -32,7 +32,7 @@ public abstract class OperationFunction {
             return fa.apply(a).recover(fb);
         }
     }
-    public OperationFunction allways(CodeBlock b) {
+    public OperationFunction always(CodeBlock b) {
         return new AllwaysOperationFunction(this, b);
     }
     public class AllwaysOperationFunction extends OperationFunction {
@@ -43,7 +43,7 @@ public abstract class OperationFunction {
             this.b = b;
         }
         override public Operation apply(Object a) {
-            return f.apply(a).allways(b);
+            return f.apply(a).always(b);
         }
     }
     public Operation bulkify(List<Object> bs) {

@@ -442,9 +442,9 @@ private class OperationPropTest {
         TestBlock codeBlock = new TestBlock(0);
         try {
             (new CreateAccountFunction())
-                .allways(codeBlock)
+                .always(codeBlock)
                 .then(Operation.error(new TestException()).operationFunction())
-                .allways(codeBlock)
+                .always(codeBlock)
                 .apply('Test 1')
                 .execute();
         }

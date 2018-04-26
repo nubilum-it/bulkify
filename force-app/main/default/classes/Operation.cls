@@ -346,7 +346,7 @@ public class Operation implements OperationSupplier {
      * Code blocked is runned on Done | Error. 
      * If exception is thrown on Done we will generate Error otherwise old error will be propagated.
      */
-    public Operation allways(CodeBlock b) {
+    public Operation always(CodeBlock b) {
         return new Operation(new AllwaysOperationSupplier(this, b));
     }
     public class AllwaysOperationSupplier implements OperationSupplier {
@@ -365,7 +365,7 @@ public class Operation implements OperationSupplier {
                 }
                 else if (o.get() instanceof Next) {
                     Next nextA = (Next)o.get();
-                    return new Next(nextA.nextRequests, nextA.operation.allways(b));
+                    return new Next(nextA.nextRequests, nextA.operation.always(b));
                 }
                 else {// if (o.get() instanceof Error) {
                     // Run code block
